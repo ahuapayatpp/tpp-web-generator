@@ -52,7 +52,7 @@ const COLORS = {
   muted: '#94A3B8',
 };
 
-const CODECOMMIT_SEED = 'ejemplo';
+const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
 const NOMBRE_SUGERIDO = 'tpp-web-mi-modulo';
 
 // --------------------------------------------------------------------------
