@@ -413,7 +413,7 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
       chalk.hex('#FF6C37')('\u2714  Módulo creado correctamente.'),
       '',
       chalk.bold('Siguientes pasos:'),
-      chalk.cyan(`  cd ${args.destino}`),
+      chalk.cyan(`  cd ${nombre}`),
       chalk.cyan('  npm install'),
       chalk.cyan('  npm start'),
     ];
@@ -421,11 +421,11 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
     if (plantilla === 'base') {
       lines.push('',
         'Consejo: puedes pedirle a la IA crear un módulo nuevo usando como referencia',
-        '  src/assets/plantillas/, AGENTS.md y especificaciones-ui/.'
+        '  carpeta plantillas, AGENTS.md y especificaciones-ui/'
       );
     } else {
       lines.push('', `La plantilla '${plantilla}' se aplicó en src/app.`,
-        'La carpeta src/assets/plantillas/ fue eliminada del proyecto generado.');
+        'La carpeta de plantillas fue eliminada del proyecto generado.');
     }
 
     const contenido = lines.join('\n');
