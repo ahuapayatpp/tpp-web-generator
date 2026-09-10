@@ -26,7 +26,7 @@ import * as os from 'node:os';
 import chalk from 'chalk';
 import ora from 'ora';
 import boxen from 'boxen';
-import { Select, Confirm } from 'enquirer';
+import prompts from 'prompts';
 
 const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
 const NOMBRE_SUGERIDO = 'tpp-web-mi-modulo';
@@ -354,15 +354,18 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
       }
       // Interactive select when running in a TTY
       if (process.stdin.isTTY && process.stdout.isTTY) {
-        const choices = plantillas.map((p, i) => ({ name: String(i + 1), message: p }));
-        const prompt = new Select({ name: 'plantilla', message: 'Selecciona una plantilla', choices });
+        const choices = plantillas.map((p, i) => ({ title: `${i + 1}. ${p}`, value: String(i) }));
         try {
-          const res = await prompt.run();
-          // res will be the 'name' of the choice (index as string)
-          const idx = parseInt(res, 10) - 1;
-          plantilla = plantillas[idx];
+          const res = await prompts({
+            type: 'select',
+            name: 'idx',
+            message: 'Selecciona una plantilla',
+            choices,
+          });
+          if (res.idx === undefined) throw new Error('cancelled');
+          plantilla = plantillas[parseInt(res.idx, 10)];
         } catch (e) {
-          // fallback to textual input on failure
+          // fallback to textual input on failure or cancel
           console.log('\nPlantillas disponibles:');
           plantillas.forEach((p, i) => {
             const nota = p === 'base' ? ' (estado por defecto del proyecto; conserva src/assets/plantillas)' : '';
@@ -397,8 +400,8 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
     if (!args.yes) {
       if (process.stdin.isTTY && process.stdout.isTTY) {
         try {
-          const ok = await new Confirm({ name: 'confirm', message: '¿Crear el módulo?' }).run();
-          if (!ok) {
+          const res = await prompts({ type: 'confirm', name: 'ok', message: '¿Crear el módulo?', initial: true });
+          if (!res.ok) {
             console.log('Generación cancelada.');
             return;
           }
