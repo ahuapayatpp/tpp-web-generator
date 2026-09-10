@@ -23,6 +23,9 @@ import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import * as os from 'node:os';
+import chalk from 'chalk';
+import ora from 'ora';
+import boxen from 'boxen';
 
 const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
 const NOMBRE_SUGERIDO = 'tpp-web-mi-modulo';
@@ -381,35 +384,54 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
     rl.close();
 
     // 5. Copiar proyecto
-    console.log('\nCopiando proyecto...');
-    await copiarProyecto(seed, args.destino);
+      const sCopy = ora('Copiando proyecto...').start();
+      try {
+        await copiarProyecto(seed, args.destino);
+        sCopy.succeed('Proyecto copiado');
+      } catch (err) {
+        sCopy.fail('Error al copiar proyecto');
+        throw err;
+      }
 
     // 6. Aplicar plantilla
     if (plantilla !== 'base') {
-      console.log(`Aplicando plantilla '${plantilla}'...`);
-      await aplicarPlantilla(args.destino, plantilla, path.join(seed, 'src', 'assets', 'plantillas'));
+      const sTpl = ora(`Aplicando plantilla '${plantilla}'...`).start();
+      try {
+        await aplicarPlantilla(args.destino, plantilla, path.join(seed, 'src', 'assets', 'plantillas'));
+        sTpl.succeed(`Plantilla '${plantilla}' aplicada`);
+      } catch (err) {
+        sTpl.fail(`Error al aplicar plantilla '${plantilla}'`);
+        throw err;
+      }
     }
 
     // 7. Parametrizar identidad
     await parametrizarIdentidad(args.destino, nombre);
 
     // 8. Mensaje final
-    console.log('\n✔ Módulo creado correctamente.');
-    console.log('Siguientes pasos:');
-    console.log(`  cd ${args.destino}`);
-    console.log('  npm install');
-    console.log('  npm start');
+    const lines = [
+      chalk.hex('#FF6C37')('\u2714  Módulo creado correctamente.'),
+      '',
+      chalk.bold('Siguientes pasos:'),
+      chalk.cyan(`  cd ${args.destino}`),
+      chalk.cyan('  npm install'),
+      chalk.cyan('  npm start'),
+    ];
+
     if (plantilla === 'base') {
-      console.log(
-        '\nConsejo: puedes pedirle a la IA crear un módulo nuevo usando como referencia\n' +
-          '  src/assets/plantillas/, AGENTS.md y especificaciones-ui/.',
+      lines.push('',
+        'Consejo: puedes pedirle a la IA crear un módulo nuevo usando como referencia',
+        '  src/assets/plantillas/, AGENTS.md y especificaciones-ui/.'
       );
     } else {
-      console.log(
-        `\nLa plantilla '${plantilla}' se aplicó en src/app. ` +
-          'La carpeta src/assets/plantillas/ fue eliminada del proyecto generado.',
-      );
+      lines.push('', `La plantilla '${plantilla}' se aplicó en src/app.`,
+        'La carpeta src/assets/plantillas/ fue eliminada del proyecto generado.');
     }
+
+    const contenido = lines.join('\n');
+    console.log(
+      boxen(contenido, { padding: 1, margin: 1, borderStyle: 'round' })
+    );
   } finally {
     if (temporal) {
       await rm(seed, { recursive: true, force: true });
@@ -418,6 +440,6 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
 }
 
 main().catch((err) => {
-  console.error(`\n[Error] ${err.message}`);
+  console.error(chalk.red(`\n[Error] ${err.message}`));
   process.exitCode = 1;
 });
