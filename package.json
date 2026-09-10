@@ -1,0 +1,19 @@
+{
+  "name": "tpp-web-generator",
+  "version": "0.1.0",
+  "description": "CLI que genera un proyecto Angular nuevo (microfrontend TPP) a partir del seed tpp-web-base-ux y una plantilla.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tpp-web-generator": "scripts/generar-modulo.mjs"
+  },
+  "files": [
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "generar-modulo": "node scripts/generar-modulo.mjs"
+  }
+}
