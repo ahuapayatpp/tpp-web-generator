@@ -62,7 +62,7 @@ const NOMBRE_SUGERIDO = 'tpp-web-mi-modulo';
 function printHeader() {
   const contenido = [
     chalk.hex(COLORS.primary).bold('TPP · Generador de módulos'),
-    chalk.hex(COLORS.muted)('Crea un nuevo módulo a partir del seed UX'),
+    chalk.hex(COLORS.muted)('Crea un nuevo módulo a partir de base UX'),
   ].join('\n');
 
   console.log(
@@ -324,10 +324,10 @@ async function listarPlantillas(seed) {
 function obtenerDescripcionPlantilla(nombre) {
   const descripciones = {
     base: 'Proyecto limpio para comenzar desde cero',
-    'listado-base': 'Estructura para módulos centrados en listados',
-    'listado-formulario': 'Listado con creación y edición de registros',
-    'monitoreo-base': 'Vista orientada al seguimiento operacional',
-    monitoreo: 'Vista orientada al seguimiento operacional',
+    'listado-base': 'Proyecto base para mantenimiento de registros',
+    'listado-formulario': 'Proyecto para mantenimiento con formularios extensos',
+    'monitoreo-base': 'Proyecto para seguimiento operacional',
+    monitoreo: 'Proyecto para seguimiento operacional',
   };
 
   return (
