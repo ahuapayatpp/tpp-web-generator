@@ -26,6 +26,7 @@ import * as os from 'node:os';
 import chalk from 'chalk';
 import ora from 'ora';
 import boxen from 'boxen';
+import { Select, Confirm } from 'enquirer';
 
 const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
 const NOMBRE_SUGERIDO = 'tpp-web-mi-modulo';
@@ -351,18 +352,39 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
           `Plantilla desconocida: '${args.plantilla}'. Disponibles: ${plantillas.join(', ')}.`,
         );
       }
-      console.log('\nPlantillas disponibles:');
-      plantillas.forEach((p, i) => {
-        const nota =
-          p === 'base'
-            ? ' (estado por defecto del proyecto; conserva src/assets/plantillas)'
-            : '';
-        console.log(`  [${i + 1}] ${p}${nota}`);
-      });
-      const elegida = await pedir(rl, `\nSelecciona una plantilla [1]: `, (v) =>
-        normalizarPlantilla(v, plantillas) ? null : `Disponibles: ${plantillas.join(', ')}`,
-      );
-      plantilla = normalizarPlantilla(elegida ?? '1', plantillas);
+      // Interactive select when running in a TTY
+      if (process.stdin.isTTY && process.stdout.isTTY) {
+        const choices = plantillas.map((p, i) => ({ name: String(i + 1), message: p }));
+        const prompt = new Select({ name: 'plantilla', message: 'Selecciona una plantilla', choices });
+        try {
+          const res = await prompt.run();
+          // res will be the 'name' of the choice (index as string)
+          const idx = parseInt(res, 10) - 1;
+          plantilla = plantillas[idx];
+        } catch (e) {
+          // fallback to textual input on failure
+          console.log('\nPlantillas disponibles:');
+          plantillas.forEach((p, i) => {
+            const nota = p === 'base' ? ' (estado por defecto del proyecto; conserva src/assets/plantillas)' : '';
+            console.log(`  [${i + 1}] ${p}${nota}`);
+          });
+          const elegida = await pedir(rl, `\nSelecciona una plantilla [1]: `, (v) =>
+            normalizarPlantilla(v, plantillas) ? null : `Disponibles: ${plantillas.join(', ')}`,
+          );
+          plantilla = normalizarPlantilla(elegida ?? '1', plantillas);
+        }
+      } else {
+        // Non-interactive fallback
+        console.log('\nPlantillas disponibles:');
+        plantillas.forEach((p, i) => {
+          const nota = p === 'base' ? ' (estado por defecto del proyecto; conserva src/assets/plantillas)' : '';
+          console.log(`  [${i + 1}] ${p}${nota}`);
+        });
+        const elegida = await pedir(rl, `\nSelecciona una plantilla [1]: `, (v) =>
+          normalizarPlantilla(v, plantillas) ? null : `Disponibles: ${plantillas.join(', ')}`,
+        );
+        plantilla = normalizarPlantilla(elegida ?? '1', plantillas);
+      }
     }
 
     // 4. Resumen y confirmación
@@ -373,12 +395,30 @@ El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destin
     console.log(`  Seed              : ${seed}${temporal ? ' (clone temporal)' : ''}`);
 
     if (!args.yes) {
-      const confirmacion = await pedir(rl, '\n¿Crear el módulo? (s/N): ', (v) =>
-        ['s', 'S', 'n', 'N', 'y', 'Y', ''].includes(v) ? null : 'Responde s o n.',
-      );
-      if (!confirmacion || /^n$/i.test(confirmacion)) {
-        console.log('Generación cancelada.');
-        return;
+      if (process.stdin.isTTY && process.stdout.isTTY) {
+        try {
+          const ok = await new Confirm({ name: 'confirm', message: '¿Crear el módulo?' }).run();
+          if (!ok) {
+            console.log('Generación cancelada.');
+            return;
+          }
+        } catch (e) {
+          const confirmacion = await pedir(rl, '\n¿Crear el módulo? (s/N): ', (v) =>
+            ['s', 'S', 'n', 'N', 'y', 'Y', ''].includes(v) ? null : 'Responde s o n.',
+          );
+          if (!confirmacion || /^n$/i.test(confirmacion)) {
+            console.log('Generación cancelada.');
+            return;
+          }
+        }
+      } else {
+        const confirmacion = await pedir(rl, '\n¿Crear el módulo? (s/N): ', (v) =>
+          ['s', 'S', 'n', 'N', 'y', 'Y', ''].includes(v) ? null : 'Responde s o n.',
+        );
+        if (!confirmacion || /^n$/i.test(confirmacion)) {
+          console.log('Generación cancelada.');
+          return;
+        }
       }
     }
     rl.close();
