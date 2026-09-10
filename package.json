@@ -16,7 +16,7 @@
   "scripts": {
     "generar-modulo": "node scripts/generar-modulo.mjs"
   },
-  "devDependencies": {
+  "dependencies": {
     "chalk": "^5.3.0",
     "ora": "^6.1.2",
     "boxen": "^7.0.0"
