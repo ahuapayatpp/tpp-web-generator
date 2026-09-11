@@ -44,12 +44,12 @@ import prompts from 'prompts';
 // --------------------------------------------------------------------------
 
 const COLORS = {
-  primary: '#FF6C37',
-  secondary: '#00A3E0',
-  success: '#22C55E',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  muted: '#94A3B8',
+  primary: '#ff6c37',
+  secondary: '#5b6670',
+  success: '#82b536',
+  warning: '#cf9f02',
+  error: '#dc143c',
+  muted: '#9da3a9',
 };
 
 const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
@@ -69,7 +69,7 @@ function printHeader() {
     boxen(contenido, {
       padding: 1,
       margin: { top: 0, bottom: 1, left: 0, right: 0 },
-      borderStyle: 'round',
+      borderStyle: 'double',
       borderColor: COLORS.primary,
     }),
   );
@@ -1204,7 +1204,7 @@ async function main() {
         {
           padding: 1,
           margin: 1,
-          borderStyle: 'round',
+          borderStyle: 'double',
           borderColor:
             COLORS.primary,
         },
