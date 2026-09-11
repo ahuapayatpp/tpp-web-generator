@@ -1006,16 +1006,18 @@ async function main() {
         process.stdout.isTTY
       ) {
         try {
-          const res =
-            await prompts({
-              type: 'confirm',
-              name: 'ok',
-              message:
-                '¿Crear este módulo?',
-              initial: true,
-            });
+          const res = await prompts({
+            type: 'select',
+            name: 'ok',
+            message: '¿Crear este módulo?',
+            choices: [
+              { title: 'Sí', value: true },
+              { title: 'No', value: false },
+            ],
+            initial: 0,
+          });
 
-          confirmado = res.ok;
+          confirmado = res.ok === true;
         } catch {
           confirmado = false;
         }
