@@ -52,6 +52,13 @@ const COLORS = {
   muted: '#9da3a9',
 };
 
+const ICONS = (() => {
+  const useAscii = process.platform === 'win32' && !process.env.WT_SESSION;
+  return useAscii
+    ? { ok: '[OK]', warn: '[!]', err: '[ERR]', arrow: '->', check: '[OK]' }
+    : { ok: '✔', warn: '⚠', err: '✖', arrow: '→', check: '✓' };
+})();
+
 const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
 const NOMBRE_SUGERIDO = 'tpp-web-mi-modulo';
 
@@ -80,15 +87,15 @@ function printSection(titulo) {
 }
 
 function printSuccess(mensaje) {
-  console.log(chalk.hex(COLORS.success)(`✔ ${mensaje}`));
+  console.log(chalk.hex(COLORS.success)(`${ICONS.ok} ${mensaje}`));
 }
 
 function printWarning(mensaje) {
-  console.log(chalk.hex(COLORS.warning)(`⚠ ${mensaje}`));
+  console.log(chalk.hex(COLORS.warning)(`${ICONS.warn} ${mensaje}`));
 }
 
 function printError(mensaje) {
-  console.log(chalk.hex(COLORS.error)(`✖ ${mensaje}`));
+  console.log(chalk.hex(COLORS.error)(`${ICONS.err} ${mensaje}`));
 }
 
 function printLabelValue(label, value) {
@@ -193,7 +200,7 @@ async function resolverSeed(origen) {
 
     try {
       console.log(
-        `${chalk.hex(COLORS.secondary)('→')} Clonando seed...`,
+        `${chalk.hex(COLORS.secondary)(ICONS.arrow)} Clonando seed...`,
       );
 
       execFileSync(
@@ -1149,7 +1156,7 @@ async function main() {
 
     const lines = [
       chalk.hex(COLORS.success).bold(
-        '✓ Módulo creado correctamente',
+        `${ICONS.check} Módulo creado correctamente`,
       ),
       '',
       chalk.bold(nombre),
