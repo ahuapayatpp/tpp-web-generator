@@ -56,7 +56,7 @@ const ICONS = (() => {
   const useAscii = process.platform === 'win32' && !process.env.WT_SESSION;
   return useAscii
     ? { ok: '[OK]', warn: '[!]', err: '[ERR]', arrow: '->', check: '[OK]' }
-    : { ok: '✔', warn: '⚠', err: '✖', arrow: '→', check: '✓' };
+    : { ok: '✔', warn: '⚠', err: '✖', arrow: '→', check: '✔' };
 })();
 
 const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
@@ -200,7 +200,7 @@ async function resolverSeed(origen) {
 
     try {
       console.log(
-        `${chalk.hex(COLORS.secondary)(ICONS.arrow)} Clonando seed...`,
+        `${chalk.hex(COLORS.secondary)(ICONS.arrow)} Clonando base...`,
       );
 
       execFileSync(
@@ -1155,7 +1155,7 @@ async function main() {
     // ----------------------------------------------------------------------
 
     const lines = [
-      chalk.hex(COLORS.success).bold(
+      chalk.hex(COLORS.primary).bold(
         `${ICONS.check} Módulo creado correctamente`,
       ),
       '',
@@ -1175,9 +1175,9 @@ async function main() {
         'npm start',
       ),
       '',
-      `${chalk.hex(COLORS.muted)(
+      /* `${chalk.hex(COLORS.muted)(
         'Plantilla',
-      )}  ${plantilla}`,
+      )}  ${plantilla}`, */
     ];
 
     if (plantilla === 'base') {
