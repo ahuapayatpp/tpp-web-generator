@@ -11,8 +11,8 @@
 //
 //   --origen     Ruta local o URL git del seed (default: clone de CodeCommit).
 //   --destino    Carpeta donde se crea el proyecto (default: directorio actual).
-//   --nombre     Nombre del módulo (slug). Si no se pasa, usa el nombre de la carpeta.
-//   --plantilla  base | listado-base | listado-formulario | monitoreo.
+//   --nombre     Nombre del módulo (slug), opcional. Si no se pasa, usa el nombre de la carpeta.
+//   --plantilla  base | mantenimiento | detalle | monitoreo | dashboard.
 //   --yes        No pedir confirmación (modo CI).
 //   --force      Permitir generar en un destino no vacío.
 //
@@ -328,17 +328,41 @@ async function listarPlantillas(seed) {
   return ['base', ...carpetas];
 }
 
-function obtenerDescripcionPlantilla(nombre) {
-  const descripciones = {
-    base: 'Proyecto limpio para comenzar desde cero',
-    'listado-base': 'Proyecto base para mantenimiento de registros',
-    'listado-formulario': 'Proyecto para mantenimiento con formularios extensos',
-    'monitoreo-base': 'Proyecto para seguimiento operacional',
-    monitoreo: 'Proyecto para seguimiento operacional',
-  };
+const PLANTILLA_INFO = {
+  base: {
+    nombre: 'Base',
+    descripcion:
+      'Proyecto limpio para comenzar desde cero',
+  },
+  mantenimiento: {
+    nombre: 'Mantenimiento',
+    descripcion:
+      'Gestionar registros: crear, editar, consultar, eliminar',
+  },
+  monitoreo: {
+    nombre: 'Monitoreo',
+    descripcion:
+      'Seguimiento de operaciones y estados en tiempo real',
+  },
+  dashboard: {
+    nombre: 'Dashboard',
+    descripcion:
+      'KPIs, indicadores y resumen operacional',
+  },
+  detalle: {
+    nombre: 'Detalle',
+    descripcion:
+      'Ver información completa de una operación/registro',
+  },
+};
 
+function obtenerNombrePlantilla(nombre) {
+  return PLANTILLA_INFO[nombre]?.nombre ?? nombre;
+}
+
+function obtenerDescripcionPlantilla(nombre) {
   return (
-    descripciones[nombre] ??
+    PLANTILLA_INFO[nombre]?.descripcion ??
     'Plantilla base para crear un módulo'
   );
 }
@@ -563,6 +587,35 @@ async function parametrizarIdentidad(
 }
 
 // --------------------------------------------------------------------------
+// Dependencias adicionales por plantilla
+// --------------------------------------------------------------------------
+
+async function agregarDependenciasDashboard(
+  destino,
+) {
+  const pkgPath = path.join(
+    destino,
+    'package.json',
+  );
+
+  const pkg = JSON.parse(
+    await readFile(pkgPath, 'utf8'),
+  );
+
+  pkg.dependencies = pkg.dependencies ?? {};
+
+  pkg.dependencies['chart.js'] = '^4.5.1';
+  pkg.dependencies['chartjs-plugin-datalabels'] =
+    '^2.2.0';
+
+  await writeFile(
+    pkgPath,
+    JSON.stringify(pkg, null, 2) + '\n',
+    'utf8',
+  );
+}
+
+// --------------------------------------------------------------------------
 // Wizard
 // --------------------------------------------------------------------------
 
@@ -606,13 +659,7 @@ function normalizarPlantilla(
   valor,
   plantillas,
 ) {
-  const aliases = {
-    monitoreo: 'monitoreo-base',
-    base: 'base',
-  };
-
   const v =
-    aliases[valor.toLowerCase()] ??
     valor.toLowerCase();
 
   const porNumero =
@@ -715,13 +762,12 @@ ${chalk.bold('Opciones:')}
       Default: directorio actual.
 
   --nombre <nombre>
-      Nombre del módulo.
-      Si no se indica, se propone el nombre
-      de la carpeta destino.
+      Nombre del módulo (slug), opcional.
+      Si no se indica, usa el nombre de la carpeta destino.
 
   --plantilla <plantilla>
       Plantilla a utilizar:
-      base | listado-base | listado-formulario | monitoreo
+      base | mantenimiento | detalle | monitoreo | dashboard
 
   --yes
       No pedir confirmación.
@@ -791,35 +837,20 @@ async function main() {
         output: stdout,
       });
 
-    let nombre = args.nombre;
-
-    if (!nombre) {
-      const sugerido =
-        normalizarSlug(
-          path.basename(
-            args.destino,
-          ),
-        ) ||
-        NOMBRE_SUGERIDO;
-
-      printSection(
-        'Configuración del módulo',
-      );
-
-      nombre = await pedir(
-        rl,
-        `${chalk.hex(COLORS.secondary)(
-          'Nombre del módulo',
-        )} [${chalk.bold(sugerido)}]: `,
-        validarNombre,
-      );
-
-      nombre ??= sugerido;
-    }
+    const nombre =
+      args.nombre ??
+      (normalizarSlug(
+        path.basename(
+          args.destino,
+        ),
+      ) ||
+        NOMBRE_SUGERIDO);
 
     if (validarNombre(nombre)) {
       throw new Error(
-        `Nombre inválido: ${nombre}`,
+        `Nombre inválido derivado de la carpeta destino: '${path.basename(
+          args.destino,
+        )}' -> '${nombre}'. Usa --nombre <slug> para indicar otro nombre.`,
       );
     }
 
@@ -848,7 +879,10 @@ async function main() {
         const choices =
           plantillas.map(
             (p) => ({
-              title: p,
+              title:
+                obtenerNombrePlantilla(
+                  p,
+                ),
               description:
                 obtenerDescripcionPlantilla(
                   p,
@@ -890,7 +924,7 @@ async function main() {
                 `  ${chalk.hex(
                   COLORS.secondary,
                 )(`[${i + 1}]`)} ${chalk.bold(
-                  p,
+                  obtenerNombrePlantilla(p),
                 )}`,
               );
 
@@ -936,7 +970,7 @@ async function main() {
               `  ${chalk.hex(
                 COLORS.secondary,
               )(`[${i + 1}]`)} ${chalk.bold(
-                p,
+                obtenerNombrePlantilla(p),
               )}`,
             );
 
@@ -988,7 +1022,7 @@ async function main() {
 
     printLabelValue(
       'Plantilla',
-      plantilla,
+      obtenerNombrePlantilla(plantilla),
     );
 
     printLabelValue(
@@ -1098,7 +1132,9 @@ async function main() {
 
     if (plantilla !== 'base') {
       const sTpl = ora(
-        `Aplicando plantilla '${plantilla}'...`,
+        `Aplicando plantilla '${obtenerNombrePlantilla(
+          plantilla,
+        )}'...`,
       ).start();
 
       try {
@@ -1114,11 +1150,15 @@ async function main() {
         );
 
         sTpl.succeed(
-          `Plantilla '${plantilla}' aplicada`,
+          `Plantilla '${obtenerNombrePlantilla(
+            plantilla,
+          )}' aplicada`,
         );
       } catch (err) {
         sTpl.fail(
-          `Error al aplicar plantilla '${plantilla}'`,
+          `Error al aplicar plantilla '${obtenerNombrePlantilla(
+            plantilla,
+          )}'`,
         );
 
         throw err;
@@ -1150,6 +1190,28 @@ async function main() {
       throw err;
     }
 
+    if (plantilla === 'dashboard') {
+      const sDeps = ora(
+        'Agregando dependencias de gráficos (chart.js)...',
+      ).start();
+
+      try {
+        await agregarDependenciasDashboard(
+          args.destino,
+        );
+
+        sDeps.succeed(
+          'chart.js y chartjs-plugin-datalabels agregados',
+        );
+      } catch (err) {
+        sDeps.fail(
+          'Error al agregar dependencias de gráficos',
+        );
+
+        throw err;
+      }
+    }
+
     // ----------------------------------------------------------------------
     // 7. Resultado final
     // ----------------------------------------------------------------------
@@ -1165,9 +1227,6 @@ async function main() {
         'Siguientes pasos',
       ),
       '',
-      chalk.hex(COLORS.secondary)(
-        `cd ${nombre}`,
-      ),
       chalk.hex(COLORS.secondary)(
         'npm install',
       ),
@@ -1197,7 +1256,9 @@ async function main() {
       lines.push(
         '',
         chalk.hex(COLORS.muted)(
-          `La plantilla '${plantilla}' se aplicó en src/app.`,
+          `La plantilla '${obtenerNombrePlantilla(
+          plantilla,
+        )}' se aplicó en src/app.`,
         ),
         chalk.hex(COLORS.muted)(
           'La carpeta de plantillas fue eliminada del proyecto generado.',
