@@ -511,10 +511,10 @@ async function parametrizarIdentidad(
     await readFile(angPath, 'utf8'),
   );
 
-  if (ang.projects && ang.projects['tpp-base']) {
-    const proyecto = ang.projects['tpp-base'];
+  if (ang.projects && ang.projects['tpp-web-base-ux']) {
+    const proyecto = ang.projects['tpp-web-base-ux'];
 
-    delete ang.projects['tpp-base'];
+    delete ang.projects['tpp-web-base-ux'];
 
     ang.projects[nombre] = proyecto;
 
@@ -533,7 +533,7 @@ async function parametrizarIdentidad(
       if (conf?.buildTarget) {
         conf.buildTarget =
           conf.buildTarget.replace(
-            /^tpp-base/,
+            /^tpp-web-base-ux/,
             nombre,
           );
       }
