@@ -538,6 +538,17 @@ async function parametrizarIdentidad(
           );
       }
     }
+
+    for (
+      const conf of Object.values(
+        proyecto.architect?.build?.configurations ?? {},
+      )
+    ) {
+      if (conf?.baseHref) {
+        conf.baseHref =
+          `/${nombre}/browser/`;
+      }
+    }
   }
 
   await writeFile(
@@ -571,19 +582,13 @@ async function parametrizarIdentidad(
     'README.md',
   );
 
-  const readme = await readFile(
-    readmePath,
-    'utf8',
-  );
-
-  await writeFile(
-    readmePath,
-    readme.replace(
-      /^# .*$/m,
-      `# ${titulo}`,
-    ),
-    'utf8',
-  );
+  if (existsSync(readmePath)) {
+    await writeFile(
+      readmePath,
+      `# ${nombre}\n`,
+      'utf8',
+    );
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -1223,14 +1228,14 @@ async function main() {
       '',
       chalk.bold(nombre),
       '',
-      chalk.hex(COLORS.muted)(
+      chalk.hex(COLORS.secondary)(
         'Siguientes pasos',
       ),
       '',
-      chalk.hex(COLORS.secondary)(
+      chalk.hex(COLORS.muted)(
         'npm install',
       ),
-      chalk.hex(COLORS.secondary)(
+      chalk.hex(COLORS.muted)(
         'npm start',
       ),
       '',
@@ -1252,7 +1257,7 @@ async function main() {
           'un módulo desde cero.',
         ),
       );
-    } else {
+    } /* else {
       lines.push(
         '',
         chalk.hex(COLORS.muted)(
@@ -1264,7 +1269,7 @@ async function main() {
           'La carpeta de plantillas fue eliminada del proyecto generado.',
         ),
       );
-    }
+    } */
 
     console.log(
       boxen(
