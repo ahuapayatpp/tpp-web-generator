@@ -36,7 +36,7 @@ npx github:ahuapayatpp/tpp-web-generator --destino /ruta/al/nuevo-modulo --maque
 - `--destino <ruta>`: carpeta donde se crea el proyecto.  
 - `--nombre <nombre>`: slug del módulo, opcional; si no se indica, usa el nombre de la carpeta destino.  
 - `--plantilla <plantilla>`: `base | mantenimiento | detalle | monitoreo | dashboard`.  
-- `--maqueta <nombre>`: nombre de la carpeta dentro de `modules/` en la rama de maquetas.  
+- `--maqueta <nombre>`: nombre de la carpeta de la maqueta en la rama de maquetas. El generador busca en `src/app/modules/` y `modules/`.
 - `--rama-base <rama>`: rama del seed con el proyecto base (default: `generalTPP`).  
 - `--rama-maquetas <rama>`: rama del seed con las maquetas (default: `generalTPP-completo`).  
 - `--yes`: no pedir confirmación (modo CI).  
@@ -62,7 +62,7 @@ Además de las plantillas, el generador puede partir de una maqueta creada por e
 
 Flujo recomendado:
 
-1. El diseñador crea la maqueta en `tpp-web-base-ux`, rama `generalTPP-completo`, carpeta `modules/<nombre-del-negocio>`.
+1. El diseñador crea la maqueta en `tpp-web-base-ux`, rama `generalTPP-completo`, dentro de `modules/<nombre-del-negocio>` (habitualmente `src/app/modules/<nombre-del-negocio>`).
 2. El desarrollador clona el repositorio del nuevo módulo y ejecuta el generador dentro de esa carpeta.
 3. En el menú interactivo elige **Maqueta de negocio existente** e ingresa el nombre de la carpeta.
 4. El generador crea el proyecto con la base de `generalTPP`, traslada la maqueta y ajusta la identidad al nombre de la carpeta destino.

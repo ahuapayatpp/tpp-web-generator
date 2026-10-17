@@ -405,22 +405,36 @@ function obtenerDescripcionPlantilla(nombre) {
 // --------------------------------------------------------------------------
 
 function obtenerRutaMaqueta(seedMaquetas, nombre) {
-  return path.join(
-    seedMaquetas,
-    'modules',
-    nombre,
-  );
+  const roots = [
+    path.join(seedMaquetas, 'src', 'app', 'modules'),
+    path.join(seedMaquetas, 'modules'),
+  ];
+
+  return roots
+    .map((root) => path.join(root, nombre))
+    .find((candidate) => existsSync(candidate)) ??
+    path.join(roots[0], nombre);
 }
 
-async function validarMaqueta(seedMaquetas, nombre) {
+async function validarMaqueta(seedMaquetas, nombre, rama) {
+  const modulesDirs = [
+    path.join(seedMaquetas, 'src', 'app', 'modules'),
+    path.join(seedMaquetas, 'modules'),
+  ];
   const maquetaDir = obtenerRutaMaqueta(
     seedMaquetas,
     nombre,
   );
 
+  if (!modulesDirs.some((dir) => existsSync(dir))) {
+    throw new Error(
+      `No se encontró la carpeta modules/ en la rama '${rama}'. Se revisaron la raíz del repositorio y src/app/modules/.`,
+    );
+  }
+
   if (!existsSync(maquetaDir)) {
     throw new Error(
-      `No se encontró la maqueta '${nombre}' en modules/ de la rama de maquetas.`,
+      `No se encontró la maqueta '${nombre}' en la rama '${rama}'. Verifica el nombre exacto dentro de modules/.`,
     );
   }
 
@@ -439,6 +453,7 @@ async function aplicarPlantilla(
   destino,
   plantillaNombre,
   plantillasDir,
+  { esMaqueta = false } = {},
 ) {
   const app = path.join(
     destino,
@@ -469,6 +484,20 @@ async function aplicarPlantilla(
     }
   }
 
+  const viewsDir = path.join(plantillaDir, 'views');
+  const pagesDir = path.join(plantillaDir, 'pages');
+
+  if (!existsSync(pagesDir) && existsSync(viewsDir)) {
+    await cp(
+      viewsDir,
+      path.join(app, 'pages'),
+      {
+        recursive: true,
+        force: true,
+      },
+    );
+  }
+
   const core = path.join(
     plantillaDir,
     'core',
@@ -497,10 +526,32 @@ async function aplicarPlantilla(
     );
   }
 
-  await copyFile(
-    path.join(plantillaDir, rutasArchivo),
-    path.join(app, 'app.routes.ts'),
-  );
+  if (esMaqueta) {
+    let rutas = await readFile(
+      path.join(plantillaDir, rutasArchivo),
+      'utf8',
+    );
+
+    if (!existsSync(pagesDir) && existsSync(viewsDir)) {
+      rutas = rutas.replace(/(['"`])\.\/views\//g, '$1./pages/');
+    }
+
+    rutas = rutas.replace(
+      /export\s+const\s+[A-Za-z_$][\w$]*(?=\s*[:=])/,
+      'export const routes',
+    );
+
+    await writeFile(
+      path.join(app, 'app.routes.ts'),
+      rutas,
+      'utf8',
+    );
+  } else {
+    await copyFile(
+      path.join(plantillaDir, rutasArchivo),
+      path.join(app, 'app.routes.ts'),
+    );
+  }
 
   // Limpiar contenido base puro.
   await rm(
@@ -728,6 +779,22 @@ function validarNombre(nombre) {
     : 'Solo minúsculas, números, guiones y guiones bajos; debe empezar por letra.';
 }
 
+function validarNombreMaqueta(nombre) {
+  if (!nombre.trim()) {
+    return 'Ingresa el nombre de la carpeta.';
+  }
+
+  if (
+    nombre === '.' ||
+    nombre === '..' ||
+    /[\\/]/.test(nombre)
+  ) {
+    return 'Ingresa solo el nombre de la carpeta, sin rutas.';
+  }
+
+  return null;
+}
+
 function normalizarPlantilla(
   valor,
   plantillas,
@@ -818,7 +885,7 @@ function mostrarAyuda() {
 ${chalk.hex(COLORS.primary).bold('TPP · Generador de módulos')}
 
 Crea un nuevo módulo Angular a partir del seed
-tpp-web-base-ux y una plantilla elegida.
+tpp-web-base-ux, una plantilla o una maqueta de negocio.
 
 ${chalk.bold('Uso:')}
 
@@ -901,6 +968,18 @@ async function main() {
 
   let seedMaquetas = null;
   let temporalMaquetas = false;
+  let rl = null;
+
+  function obtenerReadline() {
+    if (!rl) {
+      rl = readline.createInterface({
+        input: stdin,
+        output: stdout,
+      });
+    }
+
+    return rl;
+  }
 
   try {
     const plantillas =
@@ -925,12 +1004,6 @@ async function main() {
     // ----------------------------------------------------------------------
     // 2. Wizard
     // ----------------------------------------------------------------------
-
-    const rl =
-      readline.createInterface({
-        input: stdin,
-        output: stdout,
-      });
 
     const nombre =
       args.nombre ??
@@ -999,75 +1072,21 @@ async function main() {
           },
         ];
 
-        try {
-          const res =
-            await prompts({
-              type: 'select',
-              name: 'plantilla',
-              message:
-                'Selecciona un punto de partida',
-              choices,
-              initial: 0,
-            });
+        const res = await prompts({
+          type: 'select',
+          name: 'plantilla',
+          message: 'Selecciona un punto de partida',
+          choices,
+          initial: 0,
+        });
 
-          if (
-            res.plantilla ===
-            undefined
-          ) {
-            throw new Error(
-              'cancelled',
-            );
-          }
-
-          plantilla =
-            res.plantilla;
-        } catch (e) {
-          console.log(
-            '\nOpciones disponibles:',
+        if (res.plantilla === undefined) {
+          throw new Error(
+            'Selección cancelada. No se generó ningún archivo.',
           );
-
-          choices.forEach(
-            (c, i) => {
-              console.log(
-                `  ${chalk.hex(
-                  COLORS.secondary,
-                )(`[${i + 1}]`)} ${chalk.bold(
-                  c.title,
-                )}`,
-              );
-
-              if (c.description) {
-                console.log(
-                  `      ${chalk.hex(
-                    COLORS.muted,
-                  )(c.description)}`,
-                );
-              }
-            },
-          );
-
-          const elegida =
-            await pedir(
-              rl,
-              `\nSelecciona una opción [1]: `,
-              (v) => {
-                const idx = parseInt(v, 10);
-
-                if (
-                  Number.isInteger(idx) &&
-                  idx >= 1 &&
-                  idx <= choices.length
-                ) {
-                  return null;
-                }
-
-                return `Disponibles: 1-${choices.length}.`;
-              },
-            );
-
-          plantilla =
-            choices[parseInt(elegida ?? '1', 10) - 1].value;
         }
+
+        plantilla = res.plantilla;
       } else {
         console.log(
           '\nOpciones disponibles:',
@@ -1111,7 +1130,7 @@ async function main() {
 
         const elegida =
           await pedir(
-            rl,
+            obtenerReadline(),
             `\nSelecciona una opción [1]: `,
             (v) => {
               const idx = parseInt(v, 10);
@@ -1139,21 +1158,31 @@ async function main() {
 
     if (plantilla === OPCION_MAQUETA) {
       if (!maquetaNombre) {
-        maquetaNombre = (
-          await pedir(
-            rl,
-            '\nNombre exacto de la carpeta dentro de modules/: ',
-            (v) =>
-              v.trim().length > 0
-                ? null
-                : 'Ingresa el nombre de la carpeta.',
-          )
-        )?.trim();
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+          const res = await prompts({
+            type: 'text',
+            name: 'maqueta',
+            message: 'Nombre exacto de la carpeta dentro de modules/',
+            validate: (value) =>
+              validarNombreMaqueta(value) ?? true,
+          });
+
+          maquetaNombre = res.maqueta?.trim() ?? null;
+        } else {
+          maquetaNombre = (
+            await pedir(
+              obtenerReadline(),
+              '\nNombre exacto de la carpeta dentro de modules/: ',
+              validarNombreMaqueta,
+            )
+          )?.trim();
+        }
       }
 
-      if (!maquetaNombre) {
+      if (!maquetaNombre || validarNombreMaqueta(maquetaNombre)) {
         throw new Error(
-          'Debes indicar el nombre de la maqueta.',
+          validarNombreMaqueta(maquetaNombre ?? '') ??
+            'Debes indicar el nombre de la maqueta.',
         );
       }
 
@@ -1167,7 +1196,11 @@ async function main() {
         temporalMaquetas = resolved.temporal;
       }
 
-      await validarMaqueta(seedMaquetas, maquetaNombre);
+      await validarMaqueta(
+        seedMaquetas,
+        maquetaNombre,
+        args.ramaMaquetas,
+      );
     }
 
     // ----------------------------------------------------------------------
@@ -1230,7 +1263,7 @@ async function main() {
       } else {
         const confirmacion =
           await pedir(
-            rl,
+            obtenerReadline(),
             '\n¿Crear el módulo? (s/N): ',
             (v) =>
               [
@@ -1258,12 +1291,12 @@ async function main() {
           'Generación cancelada.',
         );
 
-        rl.close();
+        rl?.close();
         return;
       }
     }
 
-    rl.close();
+    rl?.close();
 
     // ----------------------------------------------------------------------
     // 4. Copiar proyecto
@@ -1308,7 +1341,12 @@ async function main() {
       try {
         const plantillasDir =
           plantilla === OPCION_MAQUETA
-            ? path.join(seedMaquetas, 'modules')
+            ? path.dirname(
+                obtenerRutaMaqueta(
+                  seedMaquetas,
+                  maquetaNombre,
+                ),
+              )
             : path.join(
                 seedBase,
                 'src',
@@ -1325,6 +1363,7 @@ async function main() {
           args.destino,
           nombreAplicar,
           plantillasDir,
+          { esMaqueta: plantilla === OPCION_MAQUETA },
         );
 
         sTpl.succeed(
@@ -1453,6 +1492,8 @@ async function main() {
       ),
     );
   } finally {
+    rl?.close();
+
     if (temporalBase) {
       await rm(seedBase, {
         recursive: true,
