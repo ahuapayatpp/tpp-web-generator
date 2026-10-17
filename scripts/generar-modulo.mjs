@@ -7,14 +7,19 @@
 // Uso:
 //   node scripts/generar-modulo.mjs [--origen <ruta|url>] [--destino <ruta>]
 //                                   [--nombre <nombre>] [--plantilla <plantilla>]
-//                                   [--yes] [--force] [--help]
+//                                   [--maqueta <nombre>] [--rama-base <rama>]
+//                                   [--rama-maquetas <rama>] [--yes] [--force]
+//                                   [--help]
 //
-//   --origen     Ruta local o URL git del seed (default: clone de CodeCommit).
-//   --destino    Carpeta donde se crea el proyecto (default: directorio actual).
-//   --nombre     Nombre del módulo (slug), opcional. Si no se pasa, usa el nombre de la carpeta.
-//   --plantilla  base | mantenimiento | detalle | monitoreo | dashboard.
-//   --yes        No pedir confirmación (modo CI).
-//   --force      Permitir generar en un destino no vacío.
+//   --origen          Ruta local o URL git del seed (default: clone de CodeCommit).
+//   --destino         Carpeta donde se crea el proyecto (default: directorio actual).
+//   --nombre          Nombre del módulo (slug), opcional. Si no se pasa, usa el nombre de la carpeta.
+//   --plantilla       base | mantenimiento | detalle | monitoreo | dashboard.
+//   --maqueta         Nombre de la carpeta dentro de modules/ en la rama de maquetas.
+//   --rama-base       Rama del seed que contiene el proyecto base (default: generalTPP).
+//   --rama-maquetas   Rama del seed que contiene las maquetas (default: generalTPP-completo).
+//   --yes             No pedir confirmación (modo CI).
+//   --force           Permitir generar en un destino no vacío.
 //
 // El CLI NUNCA modifica el proyecto seed: siempre crea un proyecto nuevo en destino.
 
@@ -60,7 +65,10 @@ const ICONS = (() => {
 })();
 
 const CODECOMMIT_SEED = 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tpp-web-base-ux';
+const RAMA_BASE_DEFAULT = 'generalTPP';
+const RAMA_MAQUETAS_DEFAULT = 'generalTPP-completo';
 const NOMBRE_SUGERIDO = 'tpp-web-mi-modulo';
+const OPCION_MAQUETA = '__MAQUETA__';
 
 // --------------------------------------------------------------------------
 // Utilidades visuales
@@ -110,6 +118,9 @@ function parseArgs(argv) {
     destino: process.cwd(),
     nombre: null,
     plantilla: null,
+    maqueta: null,
+    ramaBase: RAMA_BASE_DEFAULT,
+    ramaMaquetas: RAMA_MAQUETAS_DEFAULT,
     yes: false,
     force: false,
     help: false,
@@ -133,6 +144,18 @@ function parseArgs(argv) {
 
       case '--plantilla':
         args.plantilla = argv[++i];
+        break;
+
+      case '--maqueta':
+        args.maqueta = argv[++i];
+        break;
+
+      case '--rama-base':
+        args.ramaBase = argv[++i];
+        break;
+
+      case '--rama-maquetas':
+        args.ramaMaquetas = argv[++i];
         break;
 
       case '--yes':
@@ -192,20 +215,30 @@ function humanizar(nombre) {
 // Resolución del seed
 // --------------------------------------------------------------------------
 
-async function resolverSeed(origen) {
+async function resolverSeed(origen, rama) {
   const efectivo = origen ?? CODECOMMIT_SEED;
 
-  if (esUrlGit(efectivo)) {
+  if (esUrlGit(efectivo) || rama) {
     const tmp = await mkdtemp();
 
     try {
+      const label = rama ? `rama '${rama}'` : 'seed';
+
       console.log(
-        `${chalk.hex(COLORS.secondary)(ICONS.arrow)} Clonando base...`,
+        `${chalk.hex(COLORS.secondary)(ICONS.arrow)} Clonando ${label}...`,
       );
+
+      const cloneArgs = ['clone', '--depth', '1'];
+
+      if (rama) {
+        cloneArgs.push('--branch', rama);
+      }
+
+      cloneArgs.push(efectivo, tmp);
 
       execFileSync(
         'git',
-        ['clone', '--depth', '1', efectivo, tmp],
+        cloneArgs,
         { stdio: 'inherit' },
       );
 
@@ -220,7 +253,7 @@ async function resolverSeed(origen) {
       });
 
       throw new Error(
-        `No se pudo clonar el seed desde ${efectivo}.`,
+        `No se pudo clonar el seed desde ${efectivo}${rama ? ` (rama '${rama}')` : ''}.`,
       );
     }
   }
@@ -365,6 +398,41 @@ function obtenerDescripcionPlantilla(nombre) {
     PLANTILLA_INFO[nombre]?.descripcion ??
     'Plantilla base para crear un módulo'
   );
+}
+
+// --------------------------------------------------------------------------
+// Maquetas de negocio
+// --------------------------------------------------------------------------
+
+function obtenerRutaMaqueta(seedMaquetas, nombre) {
+  return path.join(
+    seedMaquetas,
+    'modules',
+    nombre,
+  );
+}
+
+async function validarMaqueta(seedMaquetas, nombre) {
+  const maquetaDir = obtenerRutaMaqueta(
+    seedMaquetas,
+    nombre,
+  );
+
+  if (!existsSync(maquetaDir)) {
+    throw new Error(
+      `No se encontró la maqueta '${nombre}' en modules/ de la rama de maquetas.`,
+    );
+  }
+
+  const archivos = await readdir(maquetaDir);
+
+  if (!archivos.some((f) => f.endsWith('.routes.ts'))) {
+    throw new Error(
+      `La maqueta '${nombre}' no tiene un archivo de rutas (*.routes.ts).`,
+    );
+  }
+
+  return maquetaDir;
 }
 
 async function aplicarPlantilla(
@@ -774,6 +842,18 @@ ${chalk.bold('Opciones:')}
       Plantilla a utilizar:
       base | mantenimiento | detalle | monitoreo | dashboard
 
+  --maqueta <nombre>
+      Nombre de la carpeta dentro de modules/ en la rama de maquetas.
+      Ejemplo: desgloses
+
+  --rama-base <rama>
+      Rama del seed que contiene el proyecto base.
+      Default: generalTPP
+
+  --rama-maquetas <rama>
+      Rama del seed que contiene las maquetas.
+      Default: generalTPP-completo
+
   --yes
       No pedir confirmación.
 
@@ -803,18 +883,28 @@ async function main() {
     return;
   }
 
+  if (args.plantilla && args.maqueta) {
+    throw new Error(
+      'No puedes usar --plantilla y --maqueta al mismo tiempo. Elige solo uno.',
+    );
+  }
+
   printHeader();
 
   const {
-    seed,
-    temporal,
+    seed: seedBase,
+    temporal: temporalBase,
   } = await resolverSeed(
     args.origen,
+    args.ramaBase,
   );
+
+  let seedMaquetas = null;
+  let temporalMaquetas = false;
 
   try {
     const plantillas =
-      await listarPlantillas(seed);
+      await listarPlantillas(seedBase);
 
     if (plantillas.length === 0) {
       throw new Error(
@@ -828,7 +918,7 @@ async function main() {
 
     await validarDestino(
       args.destino,
-      seed,
+      seedBase,
       args.force,
     );
 
@@ -866,6 +956,12 @@ async function main() {
         )
       : null;
 
+    let maquetaNombre = args.maqueta ?? null;
+
+    if (maquetaNombre) {
+      plantilla = OPCION_MAQUETA;
+    }
+
     if (!plantilla) {
       if (args.plantilla) {
         throw new Error(
@@ -881,8 +977,8 @@ async function main() {
           'Punto de partida',
         );
 
-        const choices =
-          plantillas.map(
+        const choices = [
+          ...plantillas.map(
             (p) => ({
               title:
                 obtenerNombrePlantilla(
@@ -894,7 +990,14 @@ async function main() {
                 ),
               value: p,
             }),
-          );
+          ),
+          {
+            title: 'Maqueta de negocio existente',
+            description:
+              'Usa una carpeta de modules/ de la rama de maquetas',
+            value: OPCION_MAQUETA,
+          },
+        ];
 
         try {
           const res =
@@ -902,7 +1005,7 @@ async function main() {
               type: 'select',
               name: 'plantilla',
               message:
-                'Selecciona una plantilla',
+                'Selecciona un punto de partida',
               choices,
               initial: 0,
             });
@@ -920,96 +1023,151 @@ async function main() {
             res.plantilla;
         } catch (e) {
           console.log(
-            '\nPlantillas disponibles:',
+            '\nOpciones disponibles:',
           );
 
-          plantillas.forEach(
-            (p, i) => {
+          choices.forEach(
+            (c, i) => {
               console.log(
                 `  ${chalk.hex(
                   COLORS.secondary,
                 )(`[${i + 1}]`)} ${chalk.bold(
-                  obtenerNombrePlantilla(p),
+                  c.title,
                 )}`,
               );
 
-              console.log(
-                `      ${chalk.hex(
-                  COLORS.muted,
-                )(
-                  obtenerDescripcionPlantilla(
-                    p,
-                  ),
-                )}`,
-              );
+              if (c.description) {
+                console.log(
+                  `      ${chalk.hex(
+                    COLORS.muted,
+                  )(c.description)}`,
+                );
+              }
             },
           );
 
           const elegida =
             await pedir(
               rl,
-              `\nSelecciona una plantilla [1]: `,
-              (v) =>
-                normalizarPlantilla(
-                  v,
-                  plantillas,
-                )
-                  ? null
-                  : `Disponibles: ${plantillas.join(', ')}`,
+              `\nSelecciona una opción [1]: `,
+              (v) => {
+                const idx = parseInt(v, 10);
+
+                if (
+                  Number.isInteger(idx) &&
+                  idx >= 1 &&
+                  idx <= choices.length
+                ) {
+                  return null;
+                }
+
+                return `Disponibles: 1-${choices.length}.`;
+              },
             );
 
           plantilla =
-            normalizarPlantilla(
-              elegida ?? '1',
-              plantillas,
-            );
+            choices[parseInt(elegida ?? '1', 10) - 1].value;
         }
       } else {
         console.log(
-          '\nPlantillas disponibles:',
+          '\nOpciones disponibles:',
         );
 
-        plantillas.forEach(
-          (p, i) => {
+        const choices = [
+          ...plantillas.map(
+            (p) => ({
+              title: obtenerNombrePlantilla(p),
+              description: obtenerDescripcionPlantilla(p),
+              value: p,
+            }),
+          ),
+          {
+            title: 'Maqueta de negocio existente',
+            description:
+              'Usa una carpeta de modules/ de la rama de maquetas',
+            value: OPCION_MAQUETA,
+          },
+        ];
+
+        choices.forEach(
+          (c, i) => {
             console.log(
               `  ${chalk.hex(
                 COLORS.secondary,
               )(`[${i + 1}]`)} ${chalk.bold(
-                obtenerNombrePlantilla(p),
+                c.title,
               )}`,
             );
 
-            console.log(
-              `      ${chalk.hex(
-                COLORS.muted,
-              )(
-                obtenerDescripcionPlantilla(
-                  p,
-                ),
-              )}`,
-            );
+            if (c.description) {
+              console.log(
+                `      ${chalk.hex(
+                  COLORS.muted,
+                )(c.description)}`,
+              );
+            }
           },
         );
 
         const elegida =
           await pedir(
             rl,
-            `\nSelecciona una plantilla [1]: `,
-            (v) =>
-              normalizarPlantilla(
-                v,
-                plantillas,
-              )
-                ? null
-                : `Disponibles: ${plantillas.join(', ')}`,
+            `\nSelecciona una opción [1]: `,
+            (v) => {
+              const idx = parseInt(v, 10);
+
+              if (
+                Number.isInteger(idx) &&
+                idx >= 1 &&
+                idx <= choices.length
+              ) {
+                return null;
+              }
+
+              return `Disponibles: 1-${choices.length}.`;
+            },
           );
 
         plantilla =
-          normalizarPlantilla(
-            elegida ?? '1',
-            plantillas,
-          );
+          choices[parseInt(elegida ?? '1', 10) - 1].value;
       }
+    }
+
+    // ----------------------------------------------------------------------
+    // 2.1 Resolver maqueta si aplica
+    // ----------------------------------------------------------------------
+
+    if (plantilla === OPCION_MAQUETA) {
+      if (!maquetaNombre) {
+        maquetaNombre = (
+          await pedir(
+            rl,
+            '\nNombre exacto de la carpeta dentro de modules/: ',
+            (v) =>
+              v.trim().length > 0
+                ? null
+                : 'Ingresa el nombre de la carpeta.',
+          )
+        )?.trim();
+      }
+
+      if (!maquetaNombre) {
+        throw new Error(
+          'Debes indicar el nombre de la maqueta.',
+        );
+      }
+
+      if (!seedMaquetas) {
+        const resolved = await resolverSeed(
+          args.origen,
+          args.ramaMaquetas,
+        );
+
+        seedMaquetas = resolved.seed;
+        temporalMaquetas = resolved.temporal;
+      }
+
+      await validarMaqueta(seedMaquetas, maquetaNombre);
     }
 
     // ----------------------------------------------------------------------
@@ -1020,25 +1178,27 @@ async function main() {
       'Resumen',
     );
 
+    if (plantilla === OPCION_MAQUETA) {
+      printLabelValue(
+        'Maqueta',
+        maquetaNombre,
+      );
+    } else {
+      printLabelValue(
+        'Plantilla',
+        obtenerNombrePlantilla(plantilla),
+      );
+    }
+
     printLabelValue(
-      'Módulo',
+      'Identidad',
       nombre,
     );
 
     printLabelValue(
-      'Plantilla',
-      obtenerNombrePlantilla(plantilla),
-    );
-
-    printLabelValue(
-      'Destino',
-      args.destino,
-    );
-
-    printLabelValue(
       'Seed',
-      `${seed}${
-        temporal
+      `${seedBase}${
+        temporalBase
           ? ' (clone temporal)'
           : ''
       }`,
@@ -1116,7 +1276,7 @@ async function main() {
     try {
       const copiados =
         await copiarProyecto(
-          seed,
+          seedBase,
           args.destino,
         );
 
@@ -1136,34 +1296,43 @@ async function main() {
     // ----------------------------------------------------------------------
 
     if (plantilla !== 'base') {
+      const label =
+        plantilla === OPCION_MAQUETA
+          ? `maqueta '${maquetaNombre}'`
+          : `plantilla '${obtenerNombrePlantilla(plantilla)}'`;
+
       const sTpl = ora(
-        `Aplicando plantilla '${obtenerNombrePlantilla(
-          plantilla,
-        )}'...`,
+        `Aplicando ${label}...`,
       ).start();
 
       try {
+        const plantillasDir =
+          plantilla === OPCION_MAQUETA
+            ? path.join(seedMaquetas, 'modules')
+            : path.join(
+                seedBase,
+                'src',
+                'assets',
+                'plantillas',
+              );
+
+        const nombreAplicar =
+          plantilla === OPCION_MAQUETA
+            ? maquetaNombre
+            : plantilla;
+
         await aplicarPlantilla(
           args.destino,
-          plantilla,
-          path.join(
-            seed,
-            'src',
-            'assets',
-            'plantillas',
-          ),
+          nombreAplicar,
+          plantillasDir,
         );
 
         sTpl.succeed(
-          `Plantilla '${obtenerNombrePlantilla(
-            plantilla,
-          )}' aplicada`,
+          `${label.charAt(0).toUpperCase() + label.slice(1)} aplicada`,
         );
       } catch (err) {
         sTpl.fail(
-          `Error al aplicar plantilla '${obtenerNombrePlantilla(
-            plantilla,
-          )}'`,
+          `Error al aplicar ${label}`,
         );
 
         throw err;
@@ -1284,8 +1453,15 @@ async function main() {
       ),
     );
   } finally {
-    if (temporal) {
-      await rm(seed, {
+    if (temporalBase) {
+      await rm(seedBase, {
+        recursive: true,
+        force: true,
+      });
+    }
+
+    if (temporalMaquetas && seedMaquetas) {
+      await rm(seedMaquetas, {
         recursive: true,
         force: true,
       });
